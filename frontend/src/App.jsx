@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Play, Pause, Settings, Download, Music, Clock, Gauge, FileJson, Save, RotateCcw } from 'lucide-react';
+import { Upload, Play, Pause, Settings, Download, Music, Clock, Gauge, FileJson, Save, RotateCcw, Type, List, Plus, Trash2, Edit2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 function App() {
@@ -9,6 +9,13 @@ function App() {
   const [offset, setOffset] = useState(0.0);
   const [startPoint, setStartPoint] = useState(0.0);
   const [text, setText] = useState("Clase de Bachata");
+  const [activeTab, setActiveTab] = useState('config'); // 'config' | 'texts'
+  const [timedTexts, setTimedTexts] = useState([]); // Array of { id, content, start, end }
+  const [newTextContent, setNewTextContent] = useState("");
+  const [newTextStart, setNewTextStart] = useState(0);
+  const [newTextEnd, setNewTextEnd] = useState(5);
+  const [editingId, setEditingId] = useState(null);
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState(null);
@@ -33,10 +40,16 @@ function App() {
 
   const currentBeat = getBeatAtTime(currentTime);
 
+  // Derive current visible texts
+  const currentOverlayTexts = timedTexts.filter(
+    t => currentTime >= t.start && currentTime <= t.end
+  );
+
   const formatTime = (time) => {
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    const tenths = Math.floor((time % 1) * 10);
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${tenths}`;
   };
 
   const handleFileChange = (e) => {
@@ -100,6 +113,53 @@ function App() {
     }
   }, [playbackRate]);
 
+  const handleSaveText = () => {
+    if (!newTextContent.trim()) return;
+
+    if (editingId) {
+      // Update existing
+      setTimedTexts(timedTexts.map(t =>
+        t.id === editingId
+          ? { ...t, content: newTextContent, start: parseFloat(newTextStart), end: parseFloat(newTextEnd) }
+          : t
+      ));
+      setEditingId(null);
+    } else {
+      // Add new
+      const newText = {
+        id: Date.now().toString(),
+        content: newTextContent,
+        start: parseFloat(newTextStart),
+        end: parseFloat(newTextEnd)
+      };
+      setTimedTexts([...timedTexts, newText]);
+    }
+    setNewTextContent("");
+    setNewTextStart(0);
+    setNewTextEnd(5);
+  };
+
+  const handleEditText = (t) => {
+    setNewTextContent(t.content);
+    setNewTextStart(t.start);
+    setNewTextEnd(t.end);
+    setEditingId(t.id);
+  };
+
+  const handleCancelEdit = () => {
+    setNewTextContent("");
+    setNewTextStart(0);
+    setNewTextEnd(5);
+    setEditingId(null);
+  };
+
+  const handleDeleteText = (id) => {
+    setTimedTexts(timedTexts.filter(t => t.id !== id));
+    if (editingId === id) {
+      handleCancelEdit();
+    }
+  };
+
   const handleProcess = async () => {
     if (!videoFile) return;
     setIsProcessing(true);
@@ -121,6 +181,10 @@ function App() {
       processData.append('bpm', bpm);
       processData.append('offset', offset);
       processData.append('text', text);
+      // TODO: Backend needs update to handle timedTexts, sending as JSON string for now if supported,
+      // or just ignoring for checking frontend only as per current scope.
+      // Assuming user wants frontend viz mainly, but persist in config.
+      // Ideally backend would render these too. For now we just keep frontend consistent.
 
       const processRes = await fetch('http://localhost:8000/process', {
         method: 'POST',
@@ -145,7 +209,8 @@ function App() {
       text,
       bpm,
       offset,
-      startPoint
+      startPoint,
+      timedTexts
     };
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -170,6 +235,7 @@ function App() {
         if (config.bpm) setBpm(Number(config.bpm));
         if (config.offset !== undefined) setOffset(Number(config.offset));
         if (config.startPoint !== undefined) setStartPoint(Number(config.startPoint));
+        if (config.timedTexts) setTimedTexts(config.timedTexts);
       } catch (error) {
         console.error("Error parsing config file", error);
         alert("Error al cargar la configuración");
@@ -203,9 +269,30 @@ function App() {
 
                   {/* Overlay Preview */}
                   <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-8">
+                    {/* Main Text (Title) */}
                     <div className="text-white font-bold text-4xl drop-shadow-lg" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
                       {text}
                     </div>
+
+                    {/* Timed Texts Overlay */}
+                    <div className="absolute inset-x-0 bottom-32 flex flex-col items-center gap-2">
+                      <AnimatePresence>
+                        {currentOverlayTexts.map((t) => (
+                          <motion.div
+                            key={t.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            transition={{ duration: 0.2 }}
+                            className="text-2xl font-semibold bg-black/60 px-4 py-2 rounded-lg text-rose-200 backdrop-blur-sm"
+                          >
+                            {t.content}
+                          </motion.div>
+                        ))}
+                      </AnimatePresence>
+                    </div>
+
+                    {/* Beat Counter */}
                     <div className="flex justify-center mb-8">
                       <AnimatePresence mode='wait'>
                         {currentBeat && (
@@ -266,7 +353,7 @@ function App() {
                   <RotateCcw className="w-5 h-5" />
                 </button>
 
-                <span className="text-xs font-mono text-slate-400 w-12 text-right">
+                <span className="text-xs font-mono text-slate-400 w-16 text-right">
                   {formatTime(currentTime)}
                 </span>
 
@@ -274,12 +361,13 @@ function App() {
                   type="range"
                   min="0"
                   max={duration || 100}
+                  step="0.05"
                   value={currentTime}
                   onChange={handleSeek}
                   className="flex-1 accent-rose-500 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
                 />
 
-                <span className="text-xs font-mono text-slate-400 w-12">
+                <span className="text-xs font-mono text-slate-400 w-16">
                   {formatTime(duration)}
                 </span>
                 <div className="flex items-center gap-2 border-l border-white/10 pl-4">
@@ -302,9 +390,9 @@ function App() {
           </div>
 
           {/* Controls Sidebar */}
-          <div className="space-y-6">
+          <div className="space-y-6 flex flex-col h-full">
 
-            <header className="flex items-center gap-3 mb-2">
+            <header className="flex items-center gap-3 mb-2 shrink-0">
               <div className="p-3 bg-gradient-to-br from-rose-500 to-purple-600 rounded-xl shadow-lg shadow-rose-500/20">
                 <Music className="w-8 h-8 text-white" />
               </div>
@@ -316,143 +404,268 @@ function App() {
               </div>
             </header>
 
-            {/* Configuration Panel */}
-            <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 ring-1 ring-white/10 space-y-6">
-              <h2 className="text-lg font-semibold flex items-center gap-2 text-rose-300">
-                <Settings className="w-5 h-5" /> Configuración
-              </h2>
+            {/* Config & Text Tabs Container */}
+            <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl ring-1 ring-white/10 flex-1 flex flex-col overflow-hidden">
 
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-xs uppercase tracking-wider text-slate-400 font-bold">Texto del Video</label>
-                  <input
-                    type="text"
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none transition-all placeholder:text-slate-600"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <label className="text-xs uppercase tracking-wider text-slate-400 font-bold">BPM</label>
-                      <span className="text-xs font-mono bg-slate-700 px-2 py-1 rounded text-rose-300">{bpm}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="60"
-                      max="180"
-                      value={bpm}
-                      onChange={(e) => setBpm(Number(e.target.value))}
-                      className="w-full accent-rose-500 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <label className="text-xs uppercase tracking-wider text-slate-400 font-bold">Offset</label>
-                      <span className="text-xs font-mono bg-slate-700 px-2 py-1 rounded text-rose-300">{offset.toFixed(2)}s</span>
-                    </div>
-                    <div className="flex gap-1">
-                      <button onClick={() => setOffset(Math.max(0, offset - 0.1))} className="px-2 bg-slate-700 rounded hover:bg-slate-600">-</button>
-                      <input
-                        type="range"
-                        min="0"
-                        max="5"
-                        step="0.01"
-                        value={offset}
-                        onChange={(e) => setOffset(Number(e.target.value))}
-                        className="flex-1 accent-purple-500 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer my-auto"
-                      />
-                      <button onClick={() => setOffset(offset + 0.1)} className="px-2 bg-slate-700 rounded hover:bg-slate-600">+</button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <label className="text-xs uppercase tracking-wider text-slate-400 font-bold">Punto de Reinicio</label>
-                    <span className="text-xs font-mono bg-slate-700 px-2 py-1 rounded text-rose-300">{startPoint.toFixed(2)}s</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => setStartPoint(Math.max(0, startPoint - 0.5))} className="p-2 bg-slate-700 rounded hover:bg-slate-600">-</button>
-                    <input
-                      type="range"
-                      min="0"
-                      max={duration || 100}
-                      step="0.1"
-                      value={startPoint}
-                      onChange={(e) => setStartPoint(Number(e.target.value))}
-                      className="w-full accent-blue-500 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer my-auto"
-                    />
-                    <button onClick={() => setStartPoint(startPoint + 0.5)} className="p-2 bg-slate-700 rounded hover:bg-slate-600">+</button>
-                  </div>
-                  <p className="text-xs text-slate-500">Define dónde comienza el video al presionar reiniciar.</p>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
+              {/* Tab Headers */}
+              <div className="flex border-b border-white/10">
                 <button
-                  onClick={handleExportConfig}
-                  className="flex-1 py-2 px-4 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors text-slate-300 hover:text-white"
+                  onClick={() => setActiveTab('config')}
+                  className={`flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-colors ${activeTab === 'config' ? 'bg-white/5 text-rose-300 border-b-2 border-rose-500' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
                 >
-                  <Save className="w-4 h-4 text-rose-400" />
-                  Exportar
+                  <Settings className="w-4 h-4" /> Configuración
                 </button>
-                <label className="flex-1 py-2 px-4 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors cursor-pointer text-slate-300 hover:text-white">
-                  <FileJson className="w-4 h-4 text-purple-400" />
-                  Importar
-                  <input
-                    type="file"
-                    accept=".json"
-                    onChange={handleImportConfig}
-                    className="hidden"
-                  />
-                </label>
+                <button
+                  onClick={() => setActiveTab('texts')}
+                  className={`flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-colors ${activeTab === 'texts' ? 'bg-white/5 text-rose-300 border-b-2 border-rose-500' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                >
+                  <List className="w-4 h-4" /> Textos
+                </button>
               </div>
 
-              <button
-                onClick={handleProcess}
-                disabled={!videoFile || isProcessing}
-                className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all transform active:scale-95
-                         ${isProcessing
-                    ? 'bg-slate-700 cursor-not-allowed opacity-50'
-                    : 'bg-gradient-to-r from-rose-500 to-purple-600 hover:shadow-rose-500/25'
-                  }`}
-              >
-                {isProcessing ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Procesando...
-                  </>
-                ) : (
-                  <>
-                    <Settings className="w-5 h-5" />
-                    Procesar Video
-                  </>
+              {/* Tab Content */}
+              <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
+
+                {/* CONFIGURATION TAB */}
+                {activeTab === 'config' && (
+                  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-xs uppercase tracking-wider text-slate-400 font-bold">Texto del Video</label>
+                        <input
+                          type="text"
+                          value={text}
+                          onChange={(e) => setText(e.target.value)}
+                          className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none transition-all placeholder:text-slate-600"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <label className="text-xs uppercase tracking-wider text-slate-400 font-bold">BPM</label>
+                            <span className="text-xs font-mono bg-slate-700 px-2 py-1 rounded text-rose-300">{bpm}</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="60"
+                            max="180"
+                            value={bpm}
+                            onChange={(e) => setBpm(Number(e.target.value))}
+                            className="w-full accent-rose-500 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <label className="text-xs uppercase tracking-wider text-slate-400 font-bold">Offset</label>
+                            <span className="text-xs font-mono bg-slate-700 px-2 py-1 rounded text-rose-300">{offset.toFixed(2)}s</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="5"
+                            step="0.01"
+                            value={offset}
+                            onChange={(e) => setOffset(Number(e.target.value))}
+                            className="w-full accent-purple-500 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <label className="text-xs uppercase tracking-wider text-slate-400 font-bold">Punto de Reinicio</label>
+                          <span className="text-xs font-mono bg-slate-700 px-2 py-1 rounded text-rose-300">{startPoint.toFixed(2)}s</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => setStartPoint(Math.max(0, startPoint - 0.5))} className="p-2 bg-slate-700 rounded hover:bg-slate-600">-</button>
+                          <input
+                            type="range"
+                            min="0"
+                            max={duration || 100}
+                            step="0.1"
+                            value={startPoint}
+                            onChange={(e) => setStartPoint(Number(e.target.value))}
+                            className="w-full accent-blue-500 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer my-auto"
+                          />
+                          <button onClick={() => setStartPoint(startPoint + 0.5)} className="p-2 bg-slate-700 rounded hover:bg-slate-600">+</button>
+                        </div>
+                        <p className="text-xs text-slate-500">Define dónde comienza el video al presionar reiniciar.</p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 pt-4 border-t border-white/10">
+                      <button
+                        onClick={handleExportConfig}
+                        className="flex-1 py-2 px-4 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors text-slate-300 hover:text-white"
+                      >
+                        <Save className="w-4 h-4 text-rose-400" />
+                        Exportar
+                      </button>
+                      <label className="flex-1 py-2 px-4 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors cursor-pointer text-slate-300 hover:text-white">
+                        <FileJson className="w-4 h-4 text-purple-400" />
+                        Importar
+                        <input
+                          type="file"
+                          accept=".json"
+                          onChange={handleImportConfig}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+
+                    <button
+                      onClick={handleProcess}
+                      disabled={!videoFile || isProcessing}
+                      className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all transform active:scale-95 mt-4
+                                ${isProcessing
+                          ? 'bg-slate-700 cursor-not-allowed opacity-50'
+                          : 'bg-gradient-to-r from-rose-500 to-purple-600 hover:shadow-rose-500/25'
+                        }`}
+                    >
+                      {isProcessing ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Procesando...
+                        </>
+                      ) : (
+                        <>
+                          <Settings className="w-5 h-5" />
+                          Procesar Video
+                        </>
+                      )}
+                    </button>
+                  </div>
                 )}
-              </button>
+
+                {/* TEXTS TAB */}
+                {activeTab === 'texts' && (
+                  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                    <div className="space-y-4">
+
+                      {/* Add/Edit Text Form */}
+                      <div className={`p-4 rounded-xl border space-y-3 transition-colors ${editingId ? 'bg-blue-500/10 border-blue-500/30' : 'bg-slate-900/50 border-white/5'}`}>
+                        <div className="flex justify-between items-center">
+                          <h3 className={`text-xs font-bold uppercase ${editingId ? 'text-blue-300' : 'text-slate-400'}`}>
+                            {editingId ? 'Editar Texto' : 'Agregar Nuevo Texto'}
+                          </h3>
+                          {editingId && (
+                            <button
+                              onClick={handleCancelEdit}
+                              className="text-xs text-slate-400 hover:text-white flex items-center gap-1 bg-white/5 px-2 py-1 rounded"
+                            >
+                              <X className="w-3 h-3" /> Cancelar
+                            </button>
+                          )}
+                        </div>
+
+                        <input
+                          type="text"
+                          placeholder="Contenido del texto..."
+                          value={newTextContent}
+                          onChange={(e) => setNewTextContent(e.target.value)}
+                          className={`w-full bg-slate-800 border rounded px-3 py-2 text-sm outline-none ${editingId ? 'border-blue-500/50 focus:border-blue-500' : 'border-slate-600 focus:border-rose-500'}`}
+                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] text-slate-500 uppercase block mb-1">Inicio (s)</label>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              value={newTextStart}
+                              onChange={(e) => setNewTextStart(Number(e.target.value))}
+                              className={`w-full bg-slate-800 border rounded px-2 py-1 text-sm outline-none ${editingId ? 'border-blue-500/50' : 'border-slate-600'}`}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-500 uppercase block mb-1">Fin (s)</label>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              value={newTextEnd}
+                              onChange={(e) => setNewTextEnd(Number(e.target.value))}
+                              className={`w-full bg-slate-800 border rounded px-2 py-1 text-sm outline-none ${editingId ? 'border-blue-500/50' : 'border-slate-600'}`}
+                            />
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleSaveText}
+                          className={`w-full py-2 border rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors
+                            ${editingId
+                              ? 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border-blue-500/50'
+                              : 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border-rose-500/50'}`}
+                        >
+                          {editingId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                          {editingId ? 'Actualizar Texto' : 'Agregar Texto'}
+                        </button>
+                      </div>
+
+                      {/* Texts List */}
+                      <div className="space-y-2">
+                        {timedTexts.length === 0 ? (
+                          <p className="text-center text-slate-500 text-sm py-4 italic">No hay textos agregados.</p>
+                        ) : (
+                          timedTexts.map(t => (
+                            <div
+                              key={t.id}
+                              className={`p-3 rounded-lg border flex justify-between items-center group transition-all
+                                ${editingId === t.id
+                                  ? 'bg-blue-500/10 border-blue-500/50'
+                                  : 'bg-slate-800/80 border-white/5 hover:border-white/20'}`}
+                            >
+                              <div>
+                                <p className="font-medium text-white text-sm">{t.content}</p>
+                                <p className="text-xs text-slate-400 font-mono mt-1">{t.start}s - {t.end}s</p>
+                              </div>
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => handleEditText(t)}
+                                  className={`p-2 rounded-lg transition-colors ${editingId === t.id ? 'text-blue-400 bg-blue-500/20' : 'text-slate-500 hover:text-blue-400 hover:bg-blue-500/10'}`}
+                                  title="Editar"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteText(t.id)}
+                                  className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                                  title="Eliminar"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                    </div>
+                  </div>
+                )}
+
+              </div>
             </div>
 
-            {/* Download Section */}
+            {/* Download Section - Outside tabs so it's always visible if ready? Or inside? Keep outside/bottom */}
             <AnimatePresence>
               {downloadUrl && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-green-500/10 border border-green-500/20 rounded-2xl p-6"
+                  className="bg-green-500/10 border border-green-500/20 rounded-2xl p-4 shrink-0"
                 >
-                  <h3 className="text-green-400 font-bold mb-2 flex items-center gap-2">
+                  <h3 className="text-green-400 font-bold mb-2 flex items-center gap-2 text-sm">
                     ✅ ¡Listo!
                   </h3>
                   <a
                     href={downloadUrl}
                     download
-                    className="block w-full text-center bg-green-500 hover:bg-green-600 text-black font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    className="block w-full text-center bg-green-500 hover:bg-green-600 text-black font-bold py-2 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
                   >
-                    <Download className="w-5 h-5" />
-                    Descargar Video Resultado
+                    <Download className="w-4 h-4" />
+                    Descargar
                   </a>
                 </motion.div>
               )}
