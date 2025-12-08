@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Play, Pause, Settings, Download, Music, Clock, Gauge, FileJson, Save } from 'lucide-react';
+import { Upload, Play, Pause, Settings, Download, Music, Clock, Gauge, FileJson, Save, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 function App() {
@@ -7,6 +7,7 @@ function App() {
   const [videoUrl, setVideoUrl] = useState(null);
   const [bpm, setBpm] = useState(130);
   const [offset, setOffset] = useState(0.0);
+  const [startPoint, setStartPoint] = useState(0.0);
   const [text, setText] = useState("Clase de Bachata");
   const [isPlaying, setIsPlaying] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -81,6 +82,18 @@ function App() {
     }
   };
 
+  const handleRestart = () => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = startPoint;
+      setCurrentTime(startPoint);
+      if (!isPlaying) {
+        videoRef.current.pause(); // Ensure it stays paused if it was paused
+      } else {
+        videoRef.current.play(); // Ensure it keeps playing if it was playing
+      }
+    }
+  };
+
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.playbackRate = playbackRate;
@@ -131,7 +144,8 @@ function App() {
     const config = {
       text,
       bpm,
-      offset
+      offset,
+      startPoint
     };
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -155,6 +169,7 @@ function App() {
         if (config.text) setText(config.text);
         if (config.bpm) setBpm(Number(config.bpm));
         if (config.offset !== undefined) setOffset(Number(config.offset));
+        if (config.startPoint !== undefined) setStartPoint(Number(config.startPoint));
       } catch (error) {
         console.error("Error parsing config file", error);
         alert("Error al cargar la configuración");
@@ -243,6 +258,13 @@ function App() {
                 >
                   {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
                 </button>
+                <button
+                  onClick={handleRestart}
+                  className="p-2 rounded-full bg-slate-700 hover:bg-slate-600 transition-colors"
+                  title="Reiniciar desde punto configurado"
+                >
+                  <RotateCcw className="w-5 h-5" />
+                </button>
 
                 <span className="text-xs font-mono text-slate-400 w-12 text-right">
                   {formatTime(currentTime)}
@@ -311,40 +333,62 @@ function App() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <label className="text-xs uppercase tracking-wider text-slate-400 font-bold">BPM (Tempo)</label>
-                    <span className="text-xs font-mono bg-slate-700 px-2 py-1 rounded text-rose-300">{bpm}</span>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <label className="text-xs uppercase tracking-wider text-slate-400 font-bold">BPM</label>
+                      <span className="text-xs font-mono bg-slate-700 px-2 py-1 rounded text-rose-300">{bpm}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="60"
+                      max="180"
+                      value={bpm}
+                      onChange={(e) => setBpm(Number(e.target.value))}
+                      className="w-full accent-rose-500 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                    />
                   </div>
-                  <input
-                    type="range"
-                    min="60"
-                    max="180"
-                    value={bpm}
-                    onChange={(e) => setBpm(Number(e.target.value))}
-                    className="w-full accent-rose-500 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
-                  />
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <label className="text-xs uppercase tracking-wider text-slate-400 font-bold">Offset</label>
+                      <span className="text-xs font-mono bg-slate-700 px-2 py-1 rounded text-rose-300">{offset.toFixed(2)}s</span>
+                    </div>
+                    <div className="flex gap-1">
+                      <button onClick={() => setOffset(Math.max(0, offset - 0.1))} className="px-2 bg-slate-700 rounded hover:bg-slate-600">-</button>
+                      <input
+                        type="range"
+                        min="0"
+                        max="5"
+                        step="0.01"
+                        value={offset}
+                        onChange={(e) => setOffset(Number(e.target.value))}
+                        className="flex-1 accent-purple-500 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer my-auto"
+                      />
+                      <button onClick={() => setOffset(offset + 0.1)} className="px-2 bg-slate-700 rounded hover:bg-slate-600">+</button>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <label className="text-xs uppercase tracking-wider text-slate-400 font-bold">Offset (Inicio)</label>
-                    <span className="text-xs font-mono bg-slate-700 px-2 py-1 rounded text-rose-300">{offset.toFixed(2)}s</span>
+                    <label className="text-xs uppercase tracking-wider text-slate-400 font-bold">Punto de Reinicio</label>
+                    <span className="text-xs font-mono bg-slate-700 px-2 py-1 rounded text-rose-300">{startPoint.toFixed(2)}s</span>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => setOffset(Math.max(0, offset - 0.1))} className="p-2 bg-slate-700 rounded hover:bg-slate-600">-</button>
+                    <button onClick={() => setStartPoint(Math.max(0, startPoint - 0.5))} className="p-2 bg-slate-700 rounded hover:bg-slate-600">-</button>
                     <input
                       type="range"
                       min="0"
-                      max="5"
-                      step="0.01"
-                      value={offset}
-                      onChange={(e) => setOffset(Number(e.target.value))}
-                      className="w-full accent-purple-500 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer my-auto"
+                      max={duration || 100}
+                      step="0.1"
+                      value={startPoint}
+                      onChange={(e) => setStartPoint(Number(e.target.value))}
+                      className="w-full accent-blue-500 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer my-auto"
                     />
-                    <button onClick={() => setOffset(offset + 0.1)} className="p-2 bg-slate-700 rounded hover:bg-slate-600">+</button>
+                    <button onClick={() => setStartPoint(startPoint + 0.5)} className="p-2 bg-slate-700 rounded hover:bg-slate-600">+</button>
                   </div>
-                  <p className="text-xs text-slate-500">Ajusta el inicio para que el "1" cuadre con el beat.</p>
+                  <p className="text-xs text-slate-500">Define dónde comienza el video al presionar reiniciar.</p>
                 </div>
               </div>
 
