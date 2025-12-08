@@ -166,25 +166,15 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-white font-sans selection:bg-rose-500 selection:text-white">
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <div className="container mx-auto px-4 py-8 max-w-[95%]">
 
-        <header className="mb-8 flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-br from-rose-500 to-purple-600 rounded-xl shadow-lg shadow-rose-500/20">
-            <Music className="w-8 h-8 text-white" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-rose-400 to-purple-400 bg-clip-text text-transparent">
-              Bachata Sync
-            </h1>
-            <p className="text-slate-400 text-sm">Editor de Video & Contador de Pasos</p>
-          </div>
-        </header>
+
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
           {/* Main Video Area */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="relative group rounded-2xl overflow-hidden bg-black/50 aspect-video ring-1 ring-white/10 shadow-2xl">
+            <div className="relative group rounded-2xl overflow-hidden bg-black/50 h-[75vh] ring-1 ring-white/10 shadow-2xl">
               {videoUrl ? (
                 <>
                   <video
@@ -291,6 +281,18 @@ function App() {
 
           {/* Controls Sidebar */}
           <div className="space-y-6">
+
+            <header className="flex items-center gap-3 mb-2">
+              <div className="p-3 bg-gradient-to-br from-rose-500 to-purple-600 rounded-xl shadow-lg shadow-rose-500/20">
+                <Music className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-rose-400 to-purple-400 bg-clip-text text-transparent">
+                  Bachata Sync
+                </h1>
+                <p className="text-slate-400 text-sm">Editor de Video & Contador de Pasos</p>
+              </div>
+            </header>
 
             {/* Configuration Panel */}
             <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 ring-1 ring-white/10 space-y-6">
