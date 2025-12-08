@@ -35,3 +35,6 @@ env/
 
 # Gravity / Gemini specific
 .gemini/
+
+#.mp4 y .json
+/_videos
