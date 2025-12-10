@@ -33,7 +33,8 @@ async def process_video(
     filename: str = Form(...),
     bpm: float = Form(...),
     offset: float = Form(...),
-    text: str = Form(...)
+    text: str = Form(...),
+    timed_texts: str = Form(default="[]")
 ):
     input_path = os.path.join(UPLOAD_DIR, filename)
     output_filename = f"processed_{filename}"
@@ -44,9 +45,13 @@ async def process_video(
 
     try:
         # Call the video processing logic
-        process_video_file(input_path, output_path, bpm, offset, text)
+        import json
+        timed_texts_list = json.loads(timed_texts)
+        process_video_file(input_path, output_path, bpm, offset, text, timed_texts_list)
         return {"output_path": output_path, "download_url": f"/download/{output_filename}"}
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/download/{filename}")

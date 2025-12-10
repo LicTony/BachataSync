@@ -14,6 +14,7 @@ function App() {
   const [newTextContent, setNewTextContent] = useState("");
   const [newTextStart, setNewTextStart] = useState(0);
   const [newTextEnd, setNewTextEnd] = useState(5);
+  const [newTextPosition, setNewTextPosition] = useState("bottom"); // 'top' | 'center' | 'bottom'
   const [editingId, setEditingId] = useState(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -120,7 +121,13 @@ function App() {
       // Update existing
       setTimedTexts(timedTexts.map(t =>
         t.id === editingId
-          ? { ...t, content: newTextContent, start: parseFloat(newTextStart), end: parseFloat(newTextEnd) }
+          ? {
+            ...t,
+            content: newTextContent,
+            start: parseFloat(newTextStart),
+            end: parseFloat(newTextEnd),
+            position: newTextPosition
+          }
           : t
       ));
       setEditingId(null);
@@ -130,19 +137,22 @@ function App() {
         id: Date.now().toString(),
         content: newTextContent,
         start: parseFloat(newTextStart),
-        end: parseFloat(newTextEnd)
+        end: parseFloat(newTextEnd),
+        position: newTextPosition
       };
       setTimedTexts([...timedTexts, newText]);
     }
     setNewTextContent("");
     setNewTextStart(0);
     setNewTextEnd(5);
+    setNewTextPosition("bottom");
   };
 
   const handleEditText = (t) => {
     setNewTextContent(t.content);
     setNewTextStart(t.start);
     setNewTextEnd(t.end);
+    setNewTextPosition(t.position || "bottom");
     setEditingId(t.id);
   };
 
@@ -150,6 +160,7 @@ function App() {
     setNewTextContent("");
     setNewTextStart(0);
     setNewTextEnd(5);
+    setNewTextPosition("bottom");
     setEditingId(null);
   };
 
@@ -181,10 +192,7 @@ function App() {
       processData.append('bpm', bpm);
       processData.append('offset', offset);
       processData.append('text', text);
-      // TODO: Backend needs update to handle timedTexts, sending as JSON string for now if supported,
-      // or just ignoring for checking frontend only as per current scope.
-      // Assuming user wants frontend viz mainly, but persist in config.
-      // Ideally backend would render these too. For now we just keep frontend consistent.
+      processData.append('timed_texts', JSON.stringify(timedTexts));
 
       const processRes = await fetch('http://localhost:8000/process', {
         method: 'POST',
@@ -275,20 +283,29 @@ function App() {
                     </div>
 
                     {/* Timed Texts Overlay */}
-                    <div className="absolute inset-x-0 bottom-32 flex flex-col items-center gap-2">
+                    <div className="absolute inset-0 pointer-events-none">
                       <AnimatePresence>
-                        {currentOverlayTexts.map((t) => (
-                          <motion.div
-                            key={t.id}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            transition={{ duration: 0.2 }}
-                            className="text-2xl font-semibold bg-black/60 px-4 py-2 rounded-lg text-rose-200 backdrop-blur-sm"
-                          >
-                            {t.content}
-                          </motion.div>
-                        ))}
+                        {currentOverlayTexts.map((t) => {
+                          // Determine style based on position
+                          let positionStyle = "bottom-32 left-0 right-0 ";
+                          if (t.position === 'top') positionStyle = "top-32 left-0 right-0";
+                          if (t.position === 'center') positionStyle = "top-1/2 -translate-y-1/2 left-0 right-0";
+                          if (t.position === 'bottom') positionStyle = "bottom-32 left-0 right-0";
+
+                          return (
+                            <div key={t.id} className={`absolute ${positionStyle} flex justify-center pointer-events-none`}>
+                              <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -20 }}
+                                transition={{ duration: 0.2 }}
+                                className="text-2xl font-semibold bg-black/60 px-4 py-2 rounded-lg text-rose-200 backdrop-blur-sm shadow-xl border border-white/10"
+                              >
+                                {t.content}
+                              </motion.div>
+                            </div>
+                          );
+                        })}
                       </AnimatePresence>
                     </div>
 
@@ -591,6 +608,26 @@ function App() {
                             />
                           </div>
                         </div>
+
+                        {/* Position Selector */}
+                        <div className="space-y-2">
+                          <label className="text-[10px] text-slate-500 uppercase block">Posición</label>
+                          <div className="flex gap-2 bg-slate-800 rounded-lg p-1 border border-slate-600">
+                            {['top', 'center', 'bottom'].map((pos) => (
+                              <button
+                                key={pos}
+                                onClick={() => setNewTextPosition(pos)}
+                                className={`flex-1 py-1 px-2 rounded-md text-xs font-medium capitalize transition-colors
+                                  ${newTextPosition === pos
+                                    ? 'bg-rose-500 text-white shadow-sm'
+                                    : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                              >
+                                {pos === 'top' ? 'Arriba' : pos === 'center' ? 'Centro' : 'Abajo'}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
                         <button
                           onClick={handleSaveText}
                           className={`w-full py-2 border rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors
@@ -672,7 +709,7 @@ function App() {
             </AnimatePresence>
           </div>
         </div>
-      </div>
+      </div >
     </div >
   );
 }
