@@ -54,14 +54,52 @@ function App() {
   };
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setVideoFile(file);
-      setVideoUrl(URL.createObjectURL(file));
+    const files = Array.from(e.target.files);
+    const video = files.find(f => f.type.startsWith('video/'));
+    const json = files.find(f => f.type === 'application/json' || f.name.endsWith('.json'));
+
+    if (video) {
+      setVideoFile(video);
+      setVideoUrl(URL.createObjectURL(video));
       setDownloadUrl(null);
       setCurrentTime(0);
       setDuration(0);
       setIsPlaying(false);
+
+      // Check for matching JSON
+      // We check if a JSON file was selected OR if the user selected a JSON with the same name
+      let configToLoad = null;
+
+      if (json) {
+        // If specific json found, check name match or just load it if it's the only one?
+        // User requirement: "si existe un archivo .json con el exactamente el mismo nombre... subir ese archivo tambien"
+        // If the user selected sending multiple files, we try to match names.
+        // If they just selected one video and one json, we assume they go together.
+        const videoNameNoExt = video.name.replace(/\.[^/.]+$/, "");
+        const jsonNameNoExt = json.name.replace(/\.[^/.]+$/, "");
+
+        if (jsonNameNoExt === videoNameNoExt) {
+          configToLoad = json;
+        }
+      }
+
+      if (configToLoad) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const config = JSON.parse(event.target.result);
+            if (config.text) setText(config.text);
+            if (config.bpm) setBpm(Number(config.bpm));
+            if (config.offset !== undefined) setOffset(Number(config.offset));
+            if (config.startPoint !== undefined) setStartPoint(Number(config.startPoint));
+            if (config.timedTexts) setTimedTexts(config.timedTexts);
+            console.log("Config loaded automatically from", configToLoad.name);
+          } catch (error) {
+            console.error("Error parsing auto-loaded config file", error);
+          }
+        };
+        reader.readAsText(configToLoad);
+      }
     }
   };
 
@@ -212,7 +250,7 @@ function App() {
     }
   };
 
-  const handleExportConfig = () => {
+  const handleExportConfig = async () => {
     const config = {
       text,
       bpm,
@@ -220,11 +258,41 @@ function App() {
       startPoint,
       timedTexts
     };
-    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+    const jsonString = JSON.stringify(config, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+
+    // Default filename based on video
+    const defaultName = videoFile ? videoFile.name.replace(/\.[^/.]+$/, "") + ".json" : "bachata-config.json";
+
+    // Try using File System Access API
+    if (window.showSaveFilePicker) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: defaultName,
+          types: [{
+            description: 'JSON Config File',
+            accept: { 'application/json': ['.json'] },
+          }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return;
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.error("File save error:", err);
+        } else {
+          return; // User cancelled
+        }
+        // Fallback to legacy download
+      }
+    }
+
+    // Fallback
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'bachata-config.json';
+    a.download = defaultName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -345,9 +413,11 @@ function App() {
                   <p className="text-lg">Sube un video para comenzar</p>
                   <input
                     type="file"
-                    accept="video/mp4"
+                    accept="video/mp4, application/json"
+                    multiple
                     onChange={handleFileChange}
                     className="absolute inset-0 opacity-0 cursor-pointer"
+                    title="Selecciona el video (y opcionalmente el .json de configuración)"
                   />
                 </div>
               )}
@@ -415,7 +485,7 @@ function App() {
               </div>
               <div>
                 <h1 className="text-3xl font-bold bg-gradient-to-r from-rose-400 to-purple-400 bg-clip-text text-transparent">
-                  Bachata Sync
+                  Bachata Sync by Tony
                 </h1>
                 <p className="text-slate-400 text-sm">Editor de Video & Contador de Pasos</p>
               </div>
