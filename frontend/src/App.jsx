@@ -461,6 +461,8 @@ function App() {
                   <Timeline
                     duration={duration || 100}
                     currentTime={currentTime}
+                    offset={offset}
+                    bpm={bpm}
                     onSeek={handleSeek}
                     timedTexts={timedTexts}
                     onUpdateText={handleUpdateTextTime}
