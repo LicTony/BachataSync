@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, Play, Pause, Settings, Download, Music, Clock, Gauge, FileJson, Save, RotateCcw, Type, List, Plus, Trash2, Edit2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Timeline from './Timeline';
 
 function App() {
   const [videoFile, setVideoFile] = useState(null);
@@ -115,8 +116,8 @@ function App() {
     }
   };
 
-  const handleSeek = (e) => {
-    const time = parseFloat(e.target.value);
+  const handleSeek = (input) => {
+    const time = typeof input === 'number' ? input : parseFloat(input.target.value);
     setCurrentTime(time);
     if (videoRef.current) {
       videoRef.current.currentTime = time;
@@ -206,6 +207,18 @@ function App() {
     setTimedTexts(timedTexts.filter(t => t.id !== id));
     if (editingId === id) {
       handleCancelEdit();
+    }
+  };
+
+  const handleUpdateTextTime = (id, newStart, newEnd) => {
+    setTimedTexts(timedTexts.map(t =>
+      t.id === id ? { ...t, start: newStart, end: newEnd } : t
+    ));
+
+    // If we are currently editing this one in the form, update the form values too
+    if (editingId === id) {
+      setNewTextStart(newStart);
+      setNewTextEnd(newEnd);
     }
   };
 
@@ -444,19 +457,16 @@ function App() {
                   {formatTime(currentTime)}
                 </span>
 
-                <input
-                  type="range"
-                  min="0"
-                  max={duration || 100}
-                  step="0.05"
-                  value={currentTime}
-                  onChange={handleSeek}
-                  className="flex-1 accent-rose-500 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
-                />
-
-                <span className="text-xs font-mono text-slate-400 w-16">
-                  {formatTime(duration)}
-                </span>
+                <div className="flex-1 mx-4">
+                  <Timeline
+                    duration={duration || 100}
+                    currentTime={currentTime}
+                    onSeek={handleSeek}
+                    timedTexts={timedTexts}
+                    onUpdateText={handleUpdateTextTime}
+                    editingId={editingId}
+                  />
+                </div>
                 <div className="flex items-center gap-2 border-l border-white/10 pl-4">
                   <Gauge className="w-4 h-4 text-slate-400" />
                   <select
